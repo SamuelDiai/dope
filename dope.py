@@ -14,7 +14,7 @@ import torch
 from torchvision.transforms import ToTensor
 
 _thisdir = "/home/diai_samuel/dope"
-
+dict_key_to_shape = {'hand' : (21, 2), 'body' : (13, 2), 'face' : (84, 2)}
 from model import dope_resnet50, num_joints
 import postprocess
 import json
@@ -59,6 +59,7 @@ def dope(modelname, postprocessing='ppi', step = 'test'):
             img_path = os.path.join(path_step_sample, imagename)
             print('Loading image', imagename)
             image = Image.open(img_path)
+            width, height = image.size
             imlist = [ToTensor()(image).to(device)]
             if ckpt['half']: imlist = [im.half() for im in imlist]
             resolution = imlist[0].size()[-2:]
@@ -102,7 +103,12 @@ def dope(modelname, postprocessing='ppi', step = 'test'):
             cv2.imwrite(outfile, imout)
             
             for key_ in det_poses2d.keys():
-                np.save(os.path.join(path_pose_estimation_step_sample, imagename + '_' + key_), det_poses2d[key_])
+                try :
+                    idx_max_key = np.argmax(scores[key_])
+                    pose_ = det_poses2d[key_][idx_max_key]
+                except ValueError:
+                    pose_ = np.zeros(dict_key_to_shape[key_])
+                np.save(os.path.join(path_pose_estimation_step_sample, imagename.replace('.png', '') + '_' + key_), pose_)
             print('\t', outfile)
 
             # display results in 3D
@@ -130,9 +136,11 @@ def dope(modelname, postprocessing='ppi', step = 'test'):
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='running DOPE on an image: python dope.py --model <modelname> --image <imagename>')
     parser.add_argument('--model', required=True, type=str, help='name of the model to use (eg DOPE_v1_0_0)')
-    parser.add_argument('--step', required=True, type=str, help='step')
     parser.add_argument('--postprocess', default='ppi', choices=['ppi','nms'], help='postprocessing method')
     parser.add_argument('--visu3d', dest='do_visu3d', default=False, action='store_true')
     args = parser.parse_args()
-    dope(args.model, postprocessing=args.postprocess, step = args.step
-        )
+    dope(args.model, postprocessing=args.postprocess, step = 'dev')
+    dope(args.model, postprocessing=args.postprocess, step = 'test')
+    dope(args.model, postprocessing=args.postprocess, step = 'train')
+    
+    
